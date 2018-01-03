@@ -885,6 +885,7 @@ BINARY_FUNC(PyNumber_Rshift, nb_rshift, ">>")
 BINARY_FUNC(PyNumber_Subtract, nb_subtract, "-")
 BINARY_FUNC(PyNumber_Divmod, nb_divmod, "divmod()")
 
+#if 1
 PyObject *
 PyNumber_Add(PyObject *v, PyObject *w)
 {
@@ -899,6 +900,7 @@ PyNumber_Add(PyObject *v, PyObject *w)
     }
     return result;
 }
+#endif
 
 static PyObject *
 sequence_repeat(ssizeargfunc repeatfunc, PyObject *seq, PyObject *n)

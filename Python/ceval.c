@@ -11,6 +11,7 @@
 
 #include "Python.h"
 
+#include "actions.h"
 #include "code.h"
 #include "dictobject.h"
 #include "frameobject.h"
@@ -1566,7 +1567,7 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
                 /* unicode_concatenate consumed the ref to v */
             }
             else {
-                sum = PyNumber_Add(left, right);
+                sum = do_binary_add(left, right, co, INSTR_OFFSET());
                 Py_DECREF(left);
             }
             Py_DECREF(right);
