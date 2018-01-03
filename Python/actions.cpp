@@ -35,7 +35,10 @@ public:
     return (*((ActionList<2> *)this))(f);
   }
   PyObject *operator()(binaryfunc);
-
+  // TODO -- release captured references
+  void captures(PyObject* obj) {
+    Py_INCREF(obj);
+  }
 private:
   ArgList args_;
   DISALLOW_IMPLICIT_CONSTRUCTORS(RecordActions);
@@ -62,7 +65,7 @@ public:
   template <typename Function> PyObject *operator()(Function f);
 
   template <typename Function> PyObject *call(Function f) { return f(args_); }
-
+  void captures(PyObject*) { }
 private:
   ArgList args_;
 };
@@ -177,28 +180,200 @@ PyObject *PyNumber_Add(Evaluator &eval, TypedObject v, TypedObject w) {
   return result;
 }
 
+template <typename Evaluator>
+PyObject *_PyObject_GenericGetAttrWithDict(Evaluator &eval, TypedObject obj,
+                                           TypedObject name, PyObject *dict) {
+  PyTypeObject *tp = Py_TYPE(obj);
+  PyObject *descr = NULL;
+  PyObject *res = NULL;
+  descrgetfunc f;
+  if (!PyUnicode_Check(name)) {
+    return eval([](PyObject *obj, PyObject *name) -> PyObject * {
+      PyErr_Format(PyExc_TypeError,
+                   "attribute name must be string, not '%.200s'",
+                   name->ob_type->tp_name);
+      return NULL;
+    });
+  }
+  Py_INCREF(name.getObject());
+#ifndef NDEBUG
+  const char * name_str =  PyUnicode_AsUTF8(name.getObject());
+  bool Debug = (strcmp(name_str, "_is_owned") == 0);
+  PyObject *DebugObj = nullptr;
+  if (Debug) {
+    std::cerr << "get attr " << name_str << " from type " << tp->tp_name << '\n';
+    DebugObj = PyObject_GetAttr(obj.getObject(), name.getObject());
+  }
+#endif
+  
+  if (tp->tp_dict == NULL) {
+    if (PyType_Ready(tp) < 0)
+      goto done;
+  }
+
+  descr = _PyType_Lookup(tp, name.getObject());
+  Py_XINCREF(descr);
+
+  f = NULL;
+  if (descr != NULL) {
+    f = descr->ob_type->tp_descr_get;
+    if (f != NULL && PyDescr_IsData(descr)) {
+      eval.captures(descr);
+      res = eval([f, descr](PyObject *obj, PyObject *) {
+        return f(descr, obj, (PyObject *)obj->ob_type);
+      });
+      goto done;
+    }
+  }
+
+  assert(dict == NULL && "Unexpected dict in eval version of GetAttr");
+  if (dict == NULL) {
+    res = eval([tp](PyObject *obj, PyObject *name) {
+      PyObject *dict = NULL;
+      /* Inline _PyObject_GetDictPtr */
+      Py_ssize_t dictoffset = tp->tp_dictoffset;
+      if (dictoffset != 0) {
+        if (dictoffset < 0) {
+          Py_ssize_t tsize;
+          size_t size;
+
+          tsize = ((PyVarObject *)obj)->ob_size;
+          if (tsize < 0)
+            tsize = -tsize;
+          size = _PyObject_VAR_SIZE(tp, tsize);
+
+          dictoffset += (long)size;
+          assert(dictoffset > 0);
+          assert(dictoffset % SIZEOF_VOID_P == 0);
+        }
+        PyObject **dictptr = (PyObject **)((char *)obj + dictoffset);
+        dict = *dictptr;
+      }
+      if (dict != NULL) {
+        Py_INCREF(dict);
+        PyObject *res = PyDict_GetItem(dict, name);
+        if (res != NULL) {
+          Py_INCREF(res);
+          Py_DECREF(dict);
+          return res;
+        }
+        Py_DECREF(dict);
+      }
+      return Py_NotImplemented;
+    });
+    if (res != Py_NotImplemented)
+      goto done;
+    res = NULL;
+  }
+
+  if (f != NULL) {
+    eval.captures(descr);
+    res = eval([f, descr](PyObject *obj, PyObject *) {
+      return f(descr, obj, (PyObject *)Py_TYPE(obj));
+    });
+    goto done;
+  }
+
+  if (descr != NULL) {
+    eval.captures(descr);
+    res = eval([descr](PyObject *, PyObject *name) {
+      Py_INCREF(descr);
+      return descr;
+    });
+    // todo Py_DECREF(descr) -- taken by capture
+    descr = NULL;
+    goto done;
+  }
+
+  eval([tp](PyObject *, PyObject *name) -> PyObject * {
+    PyErr_Format(PyExc_AttributeError, "'%.50s' object has no attribute '%U'",
+                 tp->tp_name, name);
+    return NULL;
+  });
+done:
+  Py_XDECREF(descr);
+  Py_DECREF(name.getObject());
+  return res;
+}
+
+template <typename Evaluator>
+PyObject *PyObject_GenericGetAttr(Evaluator &eval, TypedObject obj,
+                                  TypedObject name) {
+  return _PyObject_GenericGetAttrWithDict(eval, obj, name, nullptr);
+}
+
+template <typename Evaluator>
+PyObject *PyObject_GetAttr(Evaluator &eval, TypedObject v, TypedObject name) {
+  PyTypeObject *tp = Py_TYPE(v);
+
+  if (!PyUnicode_Check(name)) {
+    return eval([](PyObject *, PyObject *name) -> PyObject * {
+      PyErr_Format(PyExc_TypeError,
+                   "attribute name must be string, not '%.200s'",
+                   name->ob_type->tp_name);
+      return NULL;
+    });
+  }
+  if (auto *tp_getattro = tp->tp_getattro) {
+    if (tp_getattro != ::PyObject_GenericGetAttr) {
+      return eval([tp_getattro](PyObject *v, PyObject *name) {
+        return tp_getattro(v, name);
+      });
+    }
+    return PyObject_GenericGetAttr(eval, v, name);
+  }
+  if (auto *tp_getattr = tp->tp_getattr) {
+    return eval([tp_getattr](PyObject *v, PyObject *name) -> PyObject * {
+      char *name_str = _PyUnicode_AsString(name);
+      if (name_str == NULL)
+        return NULL;
+      return tp_getattr(v, name_str);
+    });
+  }
+  return eval([tp](PyObject *, PyObject *name) -> PyObject * {
+    PyErr_Format(PyExc_AttributeError, "'%.50s' object has no attribute '%U'",
+                 tp->tp_name, name);
+    return NULL;
+  });
+}
+
 ActionDataPtr binary_add_action(ActionList<2>::ArgList args) {
   RecordActions<2> recorder(args);
   PyNumber_Add(recorder, args[0], args[1]);
   return recorder.data();
 }
+  ActionDataPtr load_attr_action(ActionList<2>::ArgList args) {
+    RecordActions<2> recorder(args);
+    PyObject_GetAttr(recorder, args[0], args[1]);
+    return recorder.data();
+  }
+  
+  template<unsigned Arity>
+  PyObject *generic_operation(PyCodeObject *code, uint32_t PC,
+                                     Cache::ActionBuilder<Arity> builder,
+                                     typename ActionList<Arity>::ArgList args) {
+    ActionData action =  Cache::operation(code, PC, builder, args);
+    return ActionList<Arity>::run(action, args);
+  }
 } // namespace
 
 extern "C" {
-PyObject *PyNumber_Add_E(PyObject *v, PyObject *w) {
+PyObject *PyNumber_Add(PyObject *v, PyObject *w) {
   EvalAction<2> eval({{v, w}});
   return PyNumber_Add(eval, v, w);
 }
 
-PyObject *do_binary_add(PyObject *left, PyObject *right,
-                        PyCodeObject *co, uint32_t PC) {
-#if 0
-  return PyNumber_Add_E(left, right);
+PyObject *do_binary_add(PyObject *left, PyObject *right, PyCodeObject *code,
+                        uint32_t PC) {
+  return generic_operation<2>(code, PC, binary_add_action, {{left,right}});
+}
+PyObject *do_load_attr(PyObject *obj, PyObject *name, PyCodeObject *code,
+                       uint32_t PC) {
+#if 1
+  return generic_operation<2>(code, PC, load_attr_action, {{obj,name}});
 #else
-  ActionData action = Cache::operation<2>(co, PC,
-                                        binary_add_action,
-                                        {{left,right}});
-  return ActionList<2>::run(action, {{left, right}});
+  EvalAction<2> eval({{obj, name}});
+  return PyObject_GetAttr(eval, obj, name);
 #endif
 }
 }
