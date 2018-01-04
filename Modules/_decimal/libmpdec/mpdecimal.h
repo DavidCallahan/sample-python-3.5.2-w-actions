@@ -847,5 +847,7 @@ MPD_PRAGMA(MPD_HIDE_SYMBOLS_END) /* restore previous scope rules */
 
 #endif /* MPDECIMAL_H */
 
-
+#ifndef _mpd_strtossize
+#error _mpd_strtossize undefined
+#endif
 

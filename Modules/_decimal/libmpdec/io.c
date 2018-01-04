@@ -39,7 +39,7 @@
 #include "constants.h"
 #include "mpd_memory.h"
 #include "typearith.h"
-#include "mpd_io.h"
+#include "io.h"
 
 
 /* This file contains functions for decimal <-> string conversions, including

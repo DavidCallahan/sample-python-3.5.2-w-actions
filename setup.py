@@ -810,7 +810,8 @@ class PyBuildExt(build_ext):
         # Detect SSL support for the socket module (via _ssl)
         search_for_ssl_incs_in = [
                               '/usr/local/ssl/include',
-                              '/usr/contrib/ssl/include/'
+                              '/usr/contrib/ssl/include/',
+                              '/usr/local/opt/openssl/include'
                              ]
         ssl_incs = find_file('openssl/ssl.h', inc_dirs,
                              search_for_ssl_incs_in

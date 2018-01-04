@@ -35,7 +35,7 @@ abs_builddir=	/Users/dcallahan/projects/Python/Python-3.5.2
 CC=		gcc
 CXX=		g++
 MAINCC=		$(CXX)
-LINKCC=		$(PURIFY) $(MAINCC)
+LINKCC=		$(CXX)
 AR=		ar
 RANLIB=		ranlib
 READELF=	:
@@ -92,7 +92,7 @@ PY_CFLAGS_NODIST=$(CONFIGURE_CFLAGS_NODIST) $(CFLAGS_NODIST)
 # be able to build extension modules using the directories specified in the
 # environment variables
 PY_CPPFLAGS=	$(BASECPPFLAGS) -I. -IInclude -I$(srcdir)/Include $(CONFIGURE_CPPFLAGS) $(CPPFLAGS)
-PY_LDFLAGS=	$(CONFIGURE_LDFLAGS) $(LDFLAGS)
+PY_LDFLAGS=	$(CONFIGURE_LDFLAGS) $(LDFLAGS) -L/usr/local/opt/openssl/lib
 NO_AS_NEEDED=	
 LDLAST=		
 SGI_ABI=	
@@ -801,7 +801,7 @@ Python/sysmodule.o: $(srcdir)/Python/sysmodule.c Makefile
 		-o $@ $(srcdir)/Python/sysmodule.c
 
 Python/actions.o: $(srcdir)/Python/actions.cpp Makefile
-	$(CXX) -c $(PY_CORE_CFLAGS) -std=c++11\
+	$(CXX) -c $(PY_CORE_CFLAGS) -std=c++11 \
 		-o $@ $(srcdir)/Python/actions.cpp
 
 $(IO_OBJS): $(IO_H)
@@ -1082,7 +1082,7 @@ altinstall: commoninstall
 
 commoninstall:   \
 		altbininstall libinstall inclinstall libainstall \
-		sharedinstall oldsharedinstall altmaninstall \
+		sharedinstall oldsharedinstall altmaninstall 
 
 # Install shared libraries enabled by Setup
 DESTDIRS=	$(exec_prefix) $(LIBDIR) $(BINLIBDEST) $(DESTSHARED)
