@@ -45,46 +45,51 @@ template <unsigned Arity> struct CachedAction {
 };
 
 template <size_t Arity>
-using CacheT = std::unordered_map<CacheKey, CachedAction<Arity>, CacheKeyHash>;
-
-// extern CacheT<1> unaryCache;
-extern CacheT<2> binaryCache;
-// extern CacheT<3> ternaryCache;
-
-template <unsigned Arity> CacheT<Arity> &getCache();
-// template<> CacheT<1> & getCache() { return unaryCache; }
-template <> CacheT<2> &getCache() { return binaryCache; }
-// template<> CacheT<3> & getCache() { return ternaryCache; }
+class Cache {
+public:
+  using CacheT = std::unordered_map<CacheKey, CachedAction<Arity>, CacheKeyHash>;
+  using ActionBuilder = Action::ActionDataPtr (*)(std::array<PyObject *, Arity>);
+  Action::ActionData operator()(PyCodeObject *codeId, uint32_t pc,
+                                ActionBuilder builder,
+                                std::array<PyObject *, Arity> args);
+  ~Cache();
+private:
+  CacheT cache;
+  unsigned hits_ = 0;
+  unsigned coldMisses_ = 0;
+  unsigned misses_ = 0;
+};
 
 template <size_t Arity>
-using ActionBuilder = Action::ActionDataPtr (*)(std::array<PyObject *, Arity>);
-
-template <size_t Arity>
-Action::ActionData operation(PyCodeObject *codeId, uint32_t pc,
-                             ActionBuilder<Arity> builder,
+Action::ActionData Cache<Arity>::operator()(PyCodeObject *codeId, uint32_t pc,
+                             ActionBuilder builder,
                              std::array<PyObject *, Arity> args) {
   auto key = std::make_pair(codeId, pc);
-  auto &cache = getCache<Arity>();
   auto Iter = cache.find(key);
   if (Iter != cache.end()) {
     auto &cachedAction = Iter->second;
     if (!cachedAction.match(args)) {
-      if (Action::DEBUG)
-        std::cerr << "miss " << std::hex << codeId << " " << std::dec << pc
-                  << '\n';
+      misses_ += 1;
       cachedAction.setIds(args);
       cachedAction.action_ = std::move(builder(args));
     }
-    if (Action::DEBUG)
-      std::cerr << "hit " << std::hex << codeId << " " << std::dec << pc
-                << '\n';
+    else {
+      hits_ += 1;
+    }
     return cachedAction.action_.get();
   }
-  if (Action::DEBUG)
-    std::cerr << "new " << std::hex << codeId << " " << std::dec << pc << '\n';
+  coldMisses_ += 1;
   auto &cachedAction = cache[key];
   cachedAction.setIds(args);
   cachedAction.action_ = std::move(builder(args));
   return cachedAction.action_.get();
+}
+  
+template<size_t Arity>
+Cache<Arity>::~Cache() {
+  float hitRate = double(hits_)/double(coldMisses_ + misses_ + hits_);
+  std::cerr << "for arity =" << Arity
+     << " cold " << coldMisses_ << " hits " << hits_ << " misses "  << misses_
+  << " rate " << hitRate << '\n';
 }
 } // namespace Cache

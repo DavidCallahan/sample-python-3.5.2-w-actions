@@ -21,7 +21,7 @@
 #undef Py_TYPE
 PyTypeObject *Py_TYPE(PyObject *o) { return o->ob_type; }
 
-Cache::CacheT<2> Cache::binaryCache;
+Cache::Cache<2> binaryCache;
 bool Action::DEBUG = false;
 
 namespace {
@@ -348,12 +348,11 @@ ActionDataPtr binary_add_action(ActionList<2>::ArgList args) {
     return recorder.data();
   }
   
-  template<unsigned Arity>
   PyObject *generic_operation(PyCodeObject *code, uint32_t PC,
-                                     Cache::ActionBuilder<Arity> builder,
-                                     typename ActionList<Arity>::ArgList args) {
-    ActionData action =  Cache::operation(code, PC, builder, args);
-    return ActionList<Arity>::run(action, args);
+                              typename Cache::Cache<2>::ActionBuilder builder,
+                              typename ActionList<2>::ArgList args) {
+    ActionData action =  binaryCache(code, PC, builder, args);
+    return ActionList<2>::run(action, args);
   }
 } // namespace
 
@@ -365,12 +364,12 @@ PyObject *PyNumber_Add(PyObject *v, PyObject *w) {
 
 PyObject *do_binary_add(PyObject *left, PyObject *right, PyCodeObject *code,
                         uint32_t PC) {
-  return generic_operation<2>(code, PC, binary_add_action, {{left,right}});
+  return generic_operation(code, PC, binary_add_action, {{left,right}});
 }
 PyObject *do_load_attr(PyObject *obj, PyObject *name, PyCodeObject *code,
                        uint32_t PC) {
 #if 1
-  return generic_operation<2>(code, PC, load_attr_action, {{obj,name}});
+  return generic_operation(code, PC, load_attr_action, {{obj,name}});
 #else
   EvalAction<2> eval({{obj, name}});
   return PyObject_GetAttr(eval, obj, name);
