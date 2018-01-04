@@ -35,6 +35,7 @@ typedef struct {
 				   Objects/lnotab_notes.txt for details. */
     void *co_zombieframe;     /* for optimization only (see frameobject.c) */
     PyObject *co_weakreflist;   /* to support weakrefs to code objects */
+    void **co_action_cache; /* to support caching of attribute lookups */
 } PyCodeObject;
 
 /* Masks for co_flags above */

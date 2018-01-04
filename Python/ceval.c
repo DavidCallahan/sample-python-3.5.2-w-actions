@@ -740,6 +740,7 @@ PyObject *PyEval_EvalFrameEx(PyFrameObject *f, int throwflag) {
   PyObject *retval = NULL; /* Return value */
   PyThreadState *tstate = PyThreadState_GET();
   PyCodeObject *co;
+  void ** actions;
 
   /* when tracing we set things up so that
 
@@ -1097,6 +1098,7 @@ PyObject *PyEval_EvalFrameEx(PyFrameObject *f, int throwflag) {
   }
 
   co = f->f_code;
+  actions = co->co_action_cache;
   names = co->co_names;
   consts = co->co_consts;
   fastlocals = f->f_localsplus;
@@ -1491,7 +1493,8 @@ PyObject *PyEval_EvalFrameEx(PyFrameObject *f, int throwflag) {
           sum = unicode_concatenate(left, right, f, next_instr);
           /* unicode_concatenate consumed the ref to v */
         } else {
-          sum = do_binary_add(left, right, co, INSTR_OFFSET());
+          assert(INSRTR_OFFSET() < Py_SIZE(co));
+          sum = do_binary_add(left, right, actions + 4*INSTR_OFFSET());
           Py_DECREF(left);
         }
         Py_DECREF(right);
@@ -2622,8 +2625,9 @@ PyObject *PyEval_EvalFrameEx(PyFrameObject *f, int throwflag) {
           PyObject *name = GETITEM(names, oparg);
           PyObject *owner = TOP();
 #if 1
-          PyObject *res = do_load_attr(owner, name, co, INSTR_OFFSET());
+          PyObject *res = do_load_attr(owner, name, actions + 4*INSTR_OFFSET());
 #else
+          PyObject *res = do_load_attr(owner, name, co, INSTR_OFFSET());
           PyObject *res = PyObject_GetAttr(owner, name);
 #endif
           Py_DECREF(owner);

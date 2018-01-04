@@ -369,6 +369,7 @@ OPCODETARGETGEN_FILES= \
 PYTHON_OBJS=	\
 		Python/_warnings.o \
 		Python/Python-ast.o \
+		Python/actions.o \
 		Python/asdl.o \
 		Python/ast.o \
 		Python/bltinmodule.o \
@@ -785,6 +786,10 @@ Python/sysmodule.o: $(srcdir)/Python/sysmodule.c Makefile
 	$(CC) -c $(PY_CORE_CFLAGS) \
 		-DABIFLAGS='"$(ABIFLAGS)"' \
 		-o $@ $(srcdir)/Python/sysmodule.c
+
+Python/actions.o: $(srcdir)/Python/actions.cpp Makefile
+	$(CXX) -c $(PY_CORE_CFLAGS) \
+		-o $@ $(srcdir)/Python/actions.cpp
 
 $(IO_OBJS): $(IO_H)
 

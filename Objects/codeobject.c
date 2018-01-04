@@ -152,6 +152,7 @@ PyCode_New(int argcount, int kwonlyargcount,
     co->co_lnotab = lnotab;
     co->co_zombieframe = NULL;
     co->co_weakreflist = NULL;
+    co->co_action_cache = (void**) calloc(Py_SIZE(code), 4*sizeof(void*));
     return co;
 }
 

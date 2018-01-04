@@ -14,6 +14,14 @@ using word = intptr_t;
 using ClassId = PyTypeObject *;
 ClassId getClassId(PyObject *obj) { return Py_TYPE(obj); }
 
+  class CacheStats {
+  public:
+    unsigned coldMisses_ = 0;
+    unsigned hits_ = 0;
+    unsigned misses_ = 0;
+    ~CacheStats();
+  };
+  
 // place holder until there are caches
 // in the code objects we combine hash code
 // of the Code objects with the PC of the operation
@@ -26,19 +34,26 @@ struct CacheKeyHash {
     return uintptr_t(C.first) ^ C.second;
   }
 };
+  extern CacheStats stats;
 
 template <unsigned Arity> struct CachedAction {
-  unsigned profile = 1;
+  int profile = 1;
   std::array<ClassId, Arity> opIds;
   Action::ActionDataPtr action_;
   // initialize leftId_ to something invalid
   CachedAction() : action_(nullptr) { opIds[0] = nullptr; }
   bool match(std::array<PyObject *, Arity> args) {
+    if (opIds[0] == nullptr) {
+      stats.coldMisses_ += 1;
+      return false;
+    }
     for (unsigned i = 0; i < Arity; i++) {
       if (opIds[i] != getClassId(args[i])) {
+        stats.misses_ += 1;
         return false;
       }
     }
+    stats.hits_ += 1;
     return true;
   }
   void setIds(std::array<PyObject *, Arity> args) {
@@ -49,14 +64,13 @@ template <unsigned Arity> struct CachedAction {
 };
 
 template <size_t Arity>
-class Cache {
+class Cache : public CacheStats {
 public:
   using CacheT = std::unordered_map<CacheKey, CachedAction<Arity>, CacheKeyHash>;
   using ActionBuilder = Action::ActionDataPtr (*)(std::array<PyObject *, Arity>);
   Action::ActionData operator()(PyCodeObject *codeId, uint32_t pc,
                                 ActionBuilder builder,
                                 std::array<PyObject *, Arity> args);
-  ~Cache();
 private:
   CacheT cache;
   unsigned hits_ = 0;
@@ -107,11 +121,12 @@ Action::ActionData Cache<Arity>::operator()(PyCodeObject *codeId, uint32_t pc,
 #endif
 }
   
-template<size_t Arity>
-Cache<Arity>::~Cache() {
+CacheStats::~CacheStats() {
+  
+#ifndef NDEBUG
   float hitRate = double(hits_)/double(coldMisses_ + misses_ + hits_);
-  std::cerr << "for arity =" << Arity
-     << " cold " << coldMisses_ << " hits " << hits_ << " misses "  << misses_
+  std::cerr << " cold " << coldMisses_ << " hits " << hits_ << " misses "  << misses_
   << " rate " << hitRate << '\n';
+#endif
 }
 } // namespace Cache

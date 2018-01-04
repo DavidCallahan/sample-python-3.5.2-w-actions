@@ -21,8 +21,9 @@
 #undef Py_TYPE
 PyTypeObject *Py_TYPE(PyObject *o) { return o->ob_type; }
 
-Cache::Cache<2> binaryCache;
+// Cache::Cache<2> binaryCache;
 bool Action::DEBUG = false;
+Cache::CacheStats Cache::stats;
 
 namespace {
 using namespace Action;
@@ -347,12 +348,36 @@ ActionDataPtr binary_add_action(ActionList<2>::ArgList args) {
     PyObject_GetAttr(recorder, args[0], args[1]);
     return recorder.data();
   }
-  
+#if 0
   PyObject *generic_operation(PyCodeObject *code, uint32_t PC,
                               typename Cache::Cache<2>::ActionBuilder builder,
                               typename ActionList<2>::ArgList args) {
     ActionData action =  binaryCache(code, PC, builder, args);
     return ActionList<2>::run(action, args);
+  }
+#endif
+  PyObject*generic_operation(typename ActionList<2>::ArgList args,
+                             Cache::CachedAction<2> * cache,
+                             PyObject * (*defaultAction)(PyObject*,PyObject*),
+                             typename Cache::Cache<2>::ActionBuilder builder) {
+    
+    if (cache->profile == PROFILE_THRESHOLD) {
+      if (cache->match(args)) {
+        return ActionList<2>::run(cache->action_.get(), args);
+      }
+      cache->profile = -1;
+    }
+    else if (cache->profile++ == 0) {
+      cache->setIds(args);
+    }
+    else if (!cache->match(args)) {
+      cache->profile = -1;
+    }
+    else if (cache->profile == PROFILE_THRESHOLD) {
+      cache->action_ = builder(args);
+      return ActionList<2>::run(cache->action_.get(), args);
+    }
+    return defaultAction(args[0], args[1]);
   }
 } // namespace
 
@@ -362,23 +387,17 @@ PyObject *PyNumber_Add(PyObject *v, PyObject *w) {
   return PyNumber_Add(eval, v, w);
 }
 
-PyObject *do_binary_add(PyObject *left, PyObject *right, PyCodeObject *code,
-                        uint32_t PC) {
- ActionData action =  binaryCache(code, PC, binary_add_action,
-                                  {{left,right}});
-  if (!action) {
-    return PyNumber_Add(left,right);
-  }
-  return ActionList<2>::run(action, {{left,right}});
+PyObject *do_binary_add(PyObject *left, PyObject *right, void ** cache_) {
+  auto *cache = reinterpret_cast<Cache::CachedAction<2> *>(cache_);
+  return generic_operation({{left,right}}, cache,
+                           ::PyNumber_Add, binary_add_action);
 }
-PyObject *do_load_attr(PyObject *obj, PyObject *name, PyCodeObject *code,
-                       uint32_t PC) {
+PyObject *do_load_attr(PyObject *obj, PyObject *name, void **cache_) {
 #if PROFILE_THRESHOLD
-  ActionData action = binaryCache(code, PC, load_attr_action, {{obj,name}});
-  if (!action) {
-    return PyObject_GetAttr(obj,name);
-  }
-  return ActionList<2>::run(action, {{obj,name}});
+  auto *cache = reinterpret_cast<Cache::CachedAction<2> *>(cache_);
+  return generic_operation({{obj,name}}, cache,
+                           ::PyObject_GetAttr,
+                           load_attr_action);
 #else
   EvalAction<2> eval({{obj, name}});
   return PyObject_GetAttr(eval, obj, name);

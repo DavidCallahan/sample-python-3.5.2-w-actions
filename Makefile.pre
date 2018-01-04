@@ -111,7 +111,7 @@ MACHDEP=	darwin
 MULTIARCH=	
 
 # Install prefix for architecture-independent files
-prefix=		/Users/dcallahan/projects/Python/install
+prefix=		/Users/dcallahan/projects/Python/install-release
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -180,7 +180,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/Users/dcallahan/projects/Python/install'
+CONFIG_ARGS=	 '--prefix=/Users/dcallahan/projects/Python/install-release'
 
 
 # Subdirectories with code
@@ -369,11 +369,11 @@ OPCODETARGETGEN_FILES= \
 PYTHON_OBJS=	\
 		Python/_warnings.o \
 		Python/Python-ast.o \
+		Python/actions.o \
 		Python/asdl.o \
 		Python/ast.o \
 		Python/bltinmodule.o \
 		Python/ceval.o \
-		Python/actions.o \
 		Python/compile.o \
 		Python/codecs.o \
 		Python/dynamic_annotations.o \
@@ -786,6 +786,10 @@ Python/sysmodule.o: $(srcdir)/Python/sysmodule.c Makefile
 	$(CC) -c $(PY_CORE_CFLAGS) \
 		-DABIFLAGS='"$(ABIFLAGS)"' \
 		-o $@ $(srcdir)/Python/sysmodule.c
+
+Python/actions.o: $(srcdir)/Python/sysmodule.c Makefile
+	$(CXX) -c $(PY_CORE_CFLAGS) \
+		-o $@ $(srcdir)/Python/actions.cpp
 
 $(IO_OBJS): $(IO_H)
 

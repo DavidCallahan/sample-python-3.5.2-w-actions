@@ -34,8 +34,8 @@ abs_builddir=	/Users/dcallahan/projects/Python/Python-3.5.2
 
 CC=		gcc
 CXX=		g++
-MAINCC=		$(CC)
-LINKCC=		$(PURIFY) $(CXX)
+MAINCC=		$(CXX)
+LINKCC=		$(PURIFY) $(MAINCC)
 AR=		ar
 RANLIB=		ranlib
 READELF=	:
@@ -112,7 +112,7 @@ MACHDEP=	darwin
 MULTIARCH=	
 
 # Install prefix for architecture-independent files
-prefix=		/Users/dcallahan/projects/Python/install
+prefix=		/Users/dcallahan/projects/Python/install-release
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -138,8 +138,8 @@ CONFINCLUDEPY=	$(CONFINCLUDEDIR)/python$(LDVERSION)
 # Symbols used for using shared libraries
 SHLIB_SUFFIX=	.so
 EXT_SUFFIX=	.cpython-35m-darwin.so
-LDSHARED=	$(CXX) -bundle -undefined dynamic_lookup $(PY_LDFLAGS)
-BLDSHARED=	$(CXX) -bundle -undefined dynamic_lookup $(PY_LDFLAGS)
+LDSHARED=	$(CC) -bundle -undefined dynamic_lookup $(PY_LDFLAGS)
+BLDSHARED=	$(CC) -bundle -undefined dynamic_lookup $(PY_LDFLAGS)
 LDCXXSHARED=	$(CXX) -bundle -undefined dynamic_lookup
 DESTSHARED=	$(BINLIBDEST)/lib-dynload
 
@@ -181,7 +181,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/Users/dcallahan/projects/Python/install'
+CONFIG_ARGS=	 '--prefix=/Users/dcallahan/projects/Python/install-release'
 
 
 # Subdirectories with code
@@ -382,11 +382,11 @@ OPCODETARGETGEN_FILES= \
 PYTHON_OBJS=	\
 		Python/_warnings.o \
 		Python/Python-ast.o \
+		Python/actions.o \
 		Python/asdl.o \
 		Python/ast.o \
 		Python/bltinmodule.o \
 		Python/ceval.o \
-		Python/actions.o \
 		Python/compile.o \
 		Python/codecs.o \
 		Python/dynamic_annotations.o \
@@ -801,7 +801,7 @@ Python/sysmodule.o: $(srcdir)/Python/sysmodule.c Makefile
 		-o $@ $(srcdir)/Python/sysmodule.c
 
 Python/actions.o: $(srcdir)/Python/actions.cpp Makefile
-	$(CXX) -c $(PY_CORE_CFLAGS) -std=c++11 \
+	$(CXX) -c $(PY_CORE_CFLAGS) -std=c++11\
 		-o $@ $(srcdir)/Python/actions.cpp
 
 $(IO_OBJS): $(IO_H)
