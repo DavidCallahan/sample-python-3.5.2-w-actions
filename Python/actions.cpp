@@ -364,12 +364,21 @@ PyObject *PyNumber_Add(PyObject *v, PyObject *w) {
 
 PyObject *do_binary_add(PyObject *left, PyObject *right, PyCodeObject *code,
                         uint32_t PC) {
-  return generic_operation(code, PC, binary_add_action, {{left,right}});
+ ActionData action =  binaryCache(code, PC, binary_add_action,
+                                  {{left,right}});
+  if (!action) {
+    return PyNumber_Add(left,right);
+  }
+  return ActionList<2>::run(action, {{left,right}});
 }
 PyObject *do_load_attr(PyObject *obj, PyObject *name, PyCodeObject *code,
                        uint32_t PC) {
-#if 1
-  return generic_operation(code, PC, load_attr_action, {{obj,name}});
+#if PROFILE_THRESHOLD
+  ActionData action = binaryCache(code, PC, load_attr_action, {{obj,name}});
+  if (!action) {
+    return PyObject_GetAttr(obj,name);
+  }
+  return ActionList<2>::run(action, {{obj,name}});
 #else
   EvalAction<2> eval({{obj, name}});
   return PyObject_GetAttr(eval, obj, name);

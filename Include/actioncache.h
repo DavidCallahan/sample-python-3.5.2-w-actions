@@ -6,6 +6,9 @@
 #include <iomanip>
 #include <iostream>
 
+#undef PROFILE_THRESHOLD
+#define PROFILE_THRESHOLD 2
+
 namespace Cache {
 using word = intptr_t;
 using ClassId = PyTypeObject *;
@@ -25,6 +28,7 @@ struct CacheKeyHash {
 };
 
 template <unsigned Arity> struct CachedAction {
+  unsigned profile = 1;
   std::array<ClassId, Arity> opIds;
   Action::ActionDataPtr action_;
   // initialize leftId_ to something invalid
@@ -71,9 +75,23 @@ Action::ActionData Cache<Arity>::operator()(PyCodeObject *codeId, uint32_t pc,
     if (!cachedAction.match(args)) {
       misses_ += 1;
       cachedAction.setIds(args);
+#ifdef PROFILE_THRESHOLD
+      cachedAction.profile = -1;
+      return nullptr;
+#else
       cachedAction.action_ = std::move(builder(args));
+#endif
     }
     else {
+#ifdef PROFILE_THRESHOLD
+      if (cachedAction.profile < 0) {
+        return nullptr;
+      }
+      cachedAction.profile += 1;
+      if (++cachedAction.profile < PROFILE_THRESHOLD) {
+        return nullptr;
+      }
+#endif
       hits_ += 1;
     }
     return cachedAction.action_.get();
@@ -81,8 +99,12 @@ Action::ActionData Cache<Arity>::operator()(PyCodeObject *codeId, uint32_t pc,
   coldMisses_ += 1;
   auto &cachedAction = cache[key];
   cachedAction.setIds(args);
+#ifdef PROFILE_THRESHOLD
+  return nullptr;
+#else
   cachedAction.action_ = std::move(builder(args));
   return cachedAction.action_.get();
+#endif
 }
   
 template<size_t Arity>
