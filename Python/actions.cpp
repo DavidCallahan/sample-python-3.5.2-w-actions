@@ -37,9 +37,8 @@ public:
   }
   PyObject *operator()(binaryfunc);
   // TODO -- release captured references
-  void captures(PyObject* obj) {
-    Py_INCREF(obj);
-  }
+  void captures(PyObject *obj) { Py_INCREF(obj); }
+
 private:
   ArgList args_;
   DISALLOW_IMPLICIT_CONSTRUCTORS(RecordActions);
@@ -66,7 +65,8 @@ public:
   template <typename Function> PyObject *operator()(Function f);
 
   template <typename Function> PyObject *call(Function f) { return f(args_); }
-  void captures(PyObject*) { }
+  void captures(PyObject *) {}
+
 private:
   ArgList args_;
 };
@@ -198,15 +198,16 @@ PyObject *_PyObject_GenericGetAttrWithDict(Evaluator &eval, TypedObject obj,
   }
   Py_INCREF(name.getObject());
 #ifndef NDEBUG
-  const char * name_str =  PyUnicode_AsUTF8(name.getObject());
+  const char *name_str = PyUnicode_AsUTF8(name.getObject());
   bool Debug = (strcmp(name_str, "_is_owned") == 0);
   PyObject *DebugObj = nullptr;
   if (Debug) {
-    std::cerr << "get attr " << name_str << " from type " << tp->tp_name << '\n';
+    std::cerr << "get attr " << name_str << " from type " << tp->tp_name
+              << '\n';
     DebugObj = PyObject_GetAttr(obj.getObject(), name.getObject());
   }
 #endif
-  
+
   if (tp->tp_dict == NULL) {
     if (PyType_Ready(tp) < 0)
       goto done;
@@ -229,11 +230,12 @@ PyObject *_PyObject_GenericGetAttrWithDict(Evaluator &eval, TypedObject obj,
 
   assert(dict == NULL && "Unexpected dict in eval version of GetAttr");
   if (dict == NULL) {
-    res = eval([tp](PyObject *obj, PyObject *name) {
-      PyObject *dict = NULL;
-      /* Inline _PyObject_GetDictPtr */
-      Py_ssize_t dictoffset = tp->tp_dictoffset;
-      if (dictoffset != 0) {
+    Py_ssize_t dictoffset = tp->tp_dictoffset;
+    if (dictoffset != 0) {
+      res = eval([tp](PyObject *obj, PyObject *name) {
+        PyObject *dict = NULL;
+        Py_ssize_t dictoffset = tp->tp_dictoffset;
+        /* Inline _PyObject_GetDictPtr */
         if (dictoffset < 0) {
           Py_ssize_t tsize;
           size_t size;
@@ -249,22 +251,22 @@ PyObject *_PyObject_GenericGetAttrWithDict(Evaluator &eval, TypedObject obj,
         }
         PyObject **dictptr = (PyObject **)((char *)obj + dictoffset);
         dict = *dictptr;
-      }
-      if (dict != NULL) {
-        Py_INCREF(dict);
-        PyObject *res = PyDict_GetItem(dict, name);
-        if (res != NULL) {
-          Py_INCREF(res);
+        if (dict != NULL) {
+          Py_INCREF(dict);
+          PyObject *res = PyDict_GetItem(dict, name);
+          if (res != NULL) {
+            Py_INCREF(res);
+            Py_DECREF(dict);
+            return res;
+          }
           Py_DECREF(dict);
-          return res;
         }
-        Py_DECREF(dict);
-      }
-      return Py_NotImplemented;
-    });
-    if (res != Py_NotImplemented)
-      goto done;
-    res = NULL;
+        return Py_NotImplemented;
+      });
+      if (res != Py_NotImplemented)
+        goto done;
+      res = NULL;
+    }
   }
 
   if (f != NULL) {
@@ -343,11 +345,11 @@ ActionDataPtr binary_add_action(ActionList<2>::ArgList args) {
   PyNumber_Add(recorder, args[0], args[1]);
   return recorder.data();
 }
-  ActionDataPtr load_attr_action(ActionList<2>::ArgList args) {
-    RecordActions<2> recorder(args);
-    PyObject_GetAttr(recorder, args[0], args[1]);
-    return recorder.data();
-  }
+ActionDataPtr load_attr_action(ActionList<2>::ArgList args) {
+  RecordActions<2> recorder(args);
+  PyObject_GetAttr(recorder, args[0], args[1]);
+  return recorder.data();
+}
 #if 0
   PyObject *generic_operation(PyCodeObject *code, uint32_t PC,
                               typename Cache::Cache<2>::ActionBuilder builder,
@@ -356,29 +358,26 @@ ActionDataPtr binary_add_action(ActionList<2>::ArgList args) {
     return ActionList<2>::run(action, args);
   }
 #endif
-  PyObject*generic_operation(typename ActionList<2>::ArgList args,
-                             Cache::CachedAction<2> * cache,
-                             PyObject * (*defaultAction)(PyObject*,PyObject*),
-                             typename Cache::Cache<2>::ActionBuilder builder) {
-    
-    if (cache->profile == PROFILE_THRESHOLD) {
-      if (cache->match(args)) {
-        return ActionList<2>::run(cache->action_.get(), args);
-      }
-      cache->profile = -1;
-    }
-    else if (cache->profile++ == 0) {
-      cache->setIds(args);
-    }
-    else if (!cache->match(args)) {
-      cache->profile = -1;
-    }
-    else if (cache->profile == PROFILE_THRESHOLD) {
-      cache->action_ = builder(args);
+PyObject *generic_operation(typename ActionList<2>::ArgList args,
+                            Cache::CachedAction<2> *cache,
+                            PyObject *(*defaultAction)(PyObject *, PyObject *),
+                            typename Cache::Cache<2>::ActionBuilder builder) {
+
+  if (cache->profile == PROFILE_THRESHOLD) {
+    if (cache->match(args)) {
       return ActionList<2>::run(cache->action_.get(), args);
     }
-    return defaultAction(args[0], args[1]);
+    cache->profile = -1;
+  } else if (cache->profile++ == 0) {
+    cache->setIds(args);
+  } else if (!cache->match(args)) {
+    cache->profile = -1;
+  } else if (cache->profile == PROFILE_THRESHOLD) {
+    cache->action_ = builder(args);
+    return ActionList<2>::run(cache->action_.get(), args);
   }
+  return defaultAction(args[0], args[1]);
+}
 } // namespace
 
 extern "C" {
@@ -387,16 +386,15 @@ PyObject *PyNumber_Add(PyObject *v, PyObject *w) {
   return PyNumber_Add(eval, v, w);
 }
 
-PyObject *do_binary_add(PyObject *left, PyObject *right, void ** cache_) {
+PyObject *do_binary_add(PyObject *left, PyObject *right, void **cache_) {
   auto *cache = reinterpret_cast<Cache::CachedAction<2> *>(cache_);
-  return generic_operation({{left,right}}, cache,
-                           ::PyNumber_Add, binary_add_action);
+  return generic_operation({{left, right}}, cache, ::PyNumber_Add,
+                           binary_add_action);
 }
 PyObject *do_load_attr(PyObject *obj, PyObject *name, void **cache_) {
 #if PROFILE_THRESHOLD
   auto *cache = reinterpret_cast<Cache::CachedAction<2> *>(cache_);
-  return generic_operation({{obj,name}}, cache,
-                           ::PyObject_GetAttr,
+  return generic_operation({{obj, name}}, cache, ::PyObject_GetAttr,
                            load_attr_action);
 #else
   EvalAction<2> eval({{obj, name}});
